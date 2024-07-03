@@ -42,7 +42,9 @@ def scrape_text(content, pattern):
     substrings = []
 
     for substring in soup.find_all(string=re.compile(pattern)):
-        substrings.append(substring.get_text())
+        res = substring.get_text()
+        if res != "":
+            substrings.append(res)
 
     return substrings
 
