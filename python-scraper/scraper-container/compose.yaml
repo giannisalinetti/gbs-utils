@@ -1,0 +1,14 @@
+# Start selenium standalone-chrome service
+networks:
+  scraper-net:
+    driver: bridge
+    name: scraper-net
+services:
+  selenium:
+    image: selenium/standalone-chrome
+    restart: always
+    ports:
+    - 4444:4444
+    selenium:
+    - scraper-net
+
