@@ -2,51 +2,93 @@
 
 import argparse
 import re
+import os
+import sys
+import validators
+import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from bs4 import BeautifulSoup
 
+class Scraper:
+    selenium_remote = "http://selenium:4444/wd/hub"
 
-def fetch_page(url):
-    """Fetch the content of the page using selenium"""
-    driver = webdriver.Chrome()
-    driver.get(url)
-    content = driver.page_source
-    driver.quit()
-    return content
+    def __init__(self, url):
+        self.url = url
+        self.content = None
 
-def scrape_headers(content):
-    """Parse the web page and extract article titles"""
-    soup = BeautifulSoup(content, 'html.parser')
-    titles = []
+        # Validate URL format and if reachable
+        status, msg = self.__check_url()
+        if not status:
+            print(msg)
+            sys.exit(1)
+      
+        # Finally fetch page content
+        self.__fetch_page()
+         
+    def __fetch_page(self):
+        """Fetch the content of the page using selenium"""
+        if self.__is_container():
+            driver = webdriver.Remote(selenium_remote, options=webdriver.ChromeOptions())
+        else:
+            driver = webdriver.Chrome()
+        driver.get(self.url)
+        self.content = driver.page_source
+        driver.quit()
 
-    for title in soup.find_all(re.compile("^h[123]")):
-        titles.append(title.get_text())
+    def __is_container(self):
+        """Check if the current process is running inside a container"""
+        return os.path.exists('/.dockerenv') or os.path.exists('/run/.containerenv')
 
-    return titles
+    def __check_url(self):
+        """Check if url is valid and reachable and raise exception in case of error"""
+        try:
+            validators.url(self.url)
+        except Exception as e:
+            return False, f"Invalid URL format {e}"
 
-def scrape_links(content):
-    """Parse the web page and extract article links"""
-    soup = BeautifulSoup(content, 'html.parser')
-    links = []
+        try:
+            response = requests.head(self.url, allow_redirects=True, timeout=10)
+            if response.status_code == 200:
+                return True, ""
+            else:
+                return False, f"URL is not reachable. Status code: {respose.status_code}"
+        except requests.RequestException as e:
+            return False, f"URL is not reachable. Error: {e}"
 
-    for link in soup.find_all('a'):
-        if link.has_attr('href'):
-            links.append(link['href'])
 
-    return links
+    def scrape_headers(self):
+        """Parse the web page and extract article titles"""
+        soup = BeautifulSoup(self.content, 'html.parser')
+        titles = []
 
-def scrape_text(content, pattern):
-    """Parse the web page and extract article substrings"""
-    soup = BeautifulSoup(content, 'html.parser')
-    substrings = []
+        for title in soup.find_all(re.compile("^h[123]")):
+            titles.append(title.get_text())
 
-    for substring in soup.find_all(string=re.compile(pattern)):
-        res = substring.get_text()
-        if res != "":
-            substrings.append(res)
+        return titles
 
-    return substrings
+    def scrape_links(self):
+        """Parse the web page and extract article links"""
+        soup = BeautifulSoup(self.content, 'html.parser')
+        links = []
+
+        for link in soup.find_all('a'):
+            if link.has_attr('href'):
+                links.append(link['href'])
+
+        return links
+
+    def scrape_text(self, pattern):
+        """Parse the web page and extract article substrings"""
+        soup = BeautifulSoup(self.content, 'html.parser')
+        substrings = []
+
+        for substring in soup.find_all(string=re.compile(pattern)):
+            res = substring.get_text()
+            if res != "":
+                substrings.append(res)
+
+        return substrings
 
 def main():
     # Set the argument parses
@@ -58,19 +100,20 @@ def main():
     # Parse the Arguments
     args = parser.parse_args()
 
-    page_content = fetch_page(args.url)
+    # Instantiate Scraper class
+    scraper = Scraper(args.url)
     
     match args.target:
         case 'headers':
-            page_titles = scrape_headers(page_content)
+            page_titles = scraper.scrape_headers()
             for idx, title in enumerate(page_titles, start=1):
                 print(f"{idx}. {title}")
         case 'links':
-            page_links = scrape_links(page_content)
+            page_links = scraper.scrape_links()
             for idx, link in enumerate(page_links, start=1):
                 print(f"{idx}. {link}")
         case 'text':
-            page_substrings = scrape_text(page_content, args.regex)
+            page_substrings = scraper.scrape_text(args.regex)
             for idx, substring in enumerate(page_substrings, start=1):
                 print(f"{idx}. {substring}")
 

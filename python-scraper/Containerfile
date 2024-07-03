@@ -2,6 +2,6 @@ FROM docker.io/library/python:3.12-alpine
 
 COPY scraper.py /
 
-RUN pip install selenium beautifulsoup4
+RUN pip install selenium beautifulsoup4 validators requests
 
 ENTRYPOINT ["/usr/local/bin/python", "/scraper.py"]
